@@ -1,19 +1,17 @@
-# ML Ops with GitHub Actions and Azure Machine Learning
+### **INFO: Please visit the following repository to get started with Github Actions for AML: https://github.com/machine-learning-apps/ml-template-azure**. The repository gets actively maintained and monitored.
+
+# ML Ops with GitHub Actions and AML
 
 <p align="center">
-  <img src="docs/images/aml.svg" height="80"/>
+  <img src="docs/images/aml.png" height="80"/>
   <img src="https://i.ya-webdesign.com/images/a-plus-png-2.png" alt="plus" height="40"/>
   <img src="docs/images/actions.png" alt="Azure Machine Learning + Actions" height="80"/>
 </p>
 
-This template can be used for easily setting up a data science or machine learning project with automated training and deployment using [GitHub Actions](https://github.com/features/actions) and [Azure Machine Learning](https://docs.microsoft.com/en-us/azure/machine-learning/). For a more comprehensive version of this automated pipeline, see the [aml-template](https://github.com/Azure/aml-template) repository.
+This template shows how to perform DevOps for Machine learning applications using [Azure Machine Learning](https://docs.microsoft.com/en-us/azure/machine-learning/) powered [GitHub Actions](). Using this template you will be able to setup your train and deployment infra, train the model and deploy them in an automated manner. 
+
 
 # Getting started
-
-### YouTube Video
-
-Click on the image to view the video on YouTube. The video shows you the setup process, which is also described below:
-[![Azure Machine Learning GitHub Actions - Setup Guide](http://img.youtube.com/vi/bmFr0LYo_6o/maxresdefault.jpg)](http://www.youtube.com/watch?v=bmFr0LYo_6o "Azure Machine Learning GitHub Actions - Setup Guide")
 
 ### 1. Prerequisites
 
@@ -34,7 +32,8 @@ To get started with ML Ops, simply create a new repo based off this template, by
 
 ### 3. Setting up the required secrets
 
-A service principal needs to be generated for authentication and getting access to your Azure subscription. We suggest adding a service principal with contributor rights to a new resource group or to the one where you have deployed your existing Azure Machine Learning workspace. Just go to the Azure Portal to find the details of your resource group or workspace. Then start the Cloud CLI or install the [Azure CLI](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest) on your computer and execute the following command to generate the required credentials:
+#### To allow GitHub Actions to access Azure
+An [Azure service principal](https://docs.microsoft.com/en-us/azure/active-directory/develop/app-objects-and-service-principals) needs to be generated. Just go to the Azure Portal to find the details of your resource group. Then start the Cloud CLI or install the [Azure CLI](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest) on your computer and execute the following command to generate the required credentials:
 
 ```sh
 # Replace {service-principal-name}, {subscription-id} and {resource-group} with your 
@@ -67,28 +66,70 @@ To do so, click on the Settings tab in your repository, then click on Secrets an
 
 Please follow [this link](https://help.github.com/en/actions/configuring-and-managing-workflows/creating-and-storing-encrypted-secrets#creating-encrypted-secrets) for more details. 
 
-### 4. Define your workspace parameters
+#### To allow Azure to trigger a GitHub Workflow
+ We also need GH PAT token with `repo` access so that we can trigger a GH workflow when the training is completed on Azure Machine Learning. 
+ 
+ <p align="center">
+  <img src="docs/images/pat_scope.PNG" alt="GitHub Template repository" width="700"/>
+</p>
+ 
+ Add the PAT token with as [a secret](https://help.github.com/en/actions/configuring-and-managing-workflows/creating-and-storing-encrypted-secrets#creating-encrypted-secrets) with the name `PATTOKEN` in your GitHub repository:
+ <p align="center">
+  <img src="docs/images/pat_secret.png" alt="GitHub Template repository" width="700"/>
+</p>
 
-You have to modify the parameters in the <a href="/.cloud/.azure/workspace.json">`/.cloud/.azure/workspace.json"` file</a> in your repository, so that the GitHub Actions create or connect to the desired Azure Machine Learning workspace. Just click on the link and edit the file.
+### 4. Setup and Define Triggers
 
-Please use the same value for the `resource_group` parameter that you have used when generating the azure credentials. If you already have an Azure ML Workspace under that resource group, change the `name` parameter in the JSON file to the name of your workspace, if you want the Action to create a new workspace in that resource group, pick a name for your new workspace, and assign it to the `name` parameter. You can also delete the `name` parameter, if you want the action to use the default value, which is the repository name.
+#### Events that trigger workflow
+Github workflows are triggered based on events specified inside workflows. These events can be from inside the github repo like a push commit or can be from outside like a webhook([repository-dispatch](https://docs.github.com/en/developers/webhooks-and-events/webhook-events-and-payloads#repository_dispatch)).
+Refer [link](https://docs.github.com/en/actions/reference/events-that-trigger-workflows) for more details on configuring your workflows to run on specific events.
 
-Once you save your changes to the file, the predefined GitHub workflow that trains and deploys a model on Azure Machine Learning gets triggered. Check the actions tab to view if your actions have successfully run.
+#### Setup Trigger
+
+We have precreated a GitHub workflow `setup.yml` that does the infrastructure creation. To trigger this workflow follow the below steps-
+- Update parameter 'resource_group' value in file [workspace.json](/.cloud/.azure/workspace.json) to your resource group name.
+- Update environment variable 'RESOURCE_GROUP' in [setup.yml](/.github/workflows/setup.yml) workflow.   Make sure your resource group name in [workspace.json](/.cloud/.azure/workspace.json) is same as that in [setup.yml](/.github/workflows/setup.yml). Committing this file will trigger this workflow and do the required setup.
+
+Check the actions tab to view if your workflows have successfully run.
 
 <p align="center">
   <img src="docs/images/actions_tab.png" alt="GitHub Actions Tab" width="700"/>
 </p>
 
-### 5. Modify the code
+#### Define Trigger
+We have created sample workflow file [deploy_model](/.github/workflows/deploy_model.yml) that gets triggered on repository dispatch event `machinelearningservices-runcompleted` as defined [here](/.github/workflows/deploy_model.yml#L4) . This workflow deploys trained model to azure kubernetes.
 
-Now you can start modifying the code in the <a href="/code">`code` folder</a>, so that your model and not the provided sample model gets trained on Azure. Where required, modify the environment yaml so that the training and deployment environments will have the correct packages installed in the conda environment for your training and deployment.
-Upon pushing the changes, actions will kick off your training and deployment run. Check the actions tab to view if your actions have successfully run.
+If you add this repository dispatch event `machinelearningservices-runcompleted` in other workflows, they will also start listening to the machine learning workspace events from  the subscribed workspace.
 
-Comment lines 39 to 55 in your <a href="/.github/workflows/train_deploy.yml">`"/.github/workflows/train_deploy.yml"` file</a> if you only want to train the model. Uncomment line 7 to 8, if you only want to kick off the workflow when pushing changes to the `"/code/"` file.
 
-### 6. Viewing your AML resources and runs
 
-The log outputs of your action will provide URLs for you to view the resources that have been created in AML. Alternatively, you can visit the [Machine Learning Studio](https://ml.azure.com/) to view the progress of your runs, etc. For more details, read the documentation below.
+### 5. Testing the trigger
+
+We have created sample workflow file [train_model.yml](/.github/workflows/train_model.yml) to train the model. You need to update this workflow file [train_model.yml](/.github/workflows/train_model.yml)  by doing a commit to  this file or to any file under 'code/' folder.
+
+This workflow trains the model and on successful training completion triggers  workflow [deploy_model](/.github/workflows/deploy_model.yml) that deploys the model.
+
+### 6. Review 
+
+Any change to training file [train.py](https://github.com/Azure-Samples/mlops-enterprise-template/blob/main/code/train/train.py) will trigger workflow [train_model.yml](/.github/workflows/train_model.yml) and train the model using updated training code.
+After this training completes [deploy_model.yml](/.github/workflows/deploy_model.yml ) will automatically be triggered and deploy model to the AKS instance.
+
+The log outputs of this workflow [deploy_model.yml](/.github/workflows/deploy_model.yml ) run will provide URLs for you to get the service endpoints deployed on kubernetes. 
+
+
+### 7. Next Steps: Add Storage Triggers
+
+As next steps, you can setup similar triggers on updates to [Azure Storage](https://azure.microsoft.com/en-gb/services/storage/) account. So, if you are using Azure Storage for storing your training data any update to the data will auto trigger the training on new data and will auto deploy the updated model too. 
+
+You would need an Azure Storage account in the same resource group as above.  To create a new storage account use [link](https://ms.portal.azure.com/#create/Microsoft.StorageAccount-ARM). 
+
+Follow there two steps to enable triggerring of GitHub Workflows on Storage Account updates. 
+- Remove comments in [deploy.core-infra.json](/infra/deploy.core-infra.json) (  [line 562](/infra/deploy.core-infra.json#L562) and [line 600](/infra/deploy.core-infra.json#L562)).
+- Update `STORAGE_ACCOUNT` variable in [setup.yml](/.github/workflows/setup.yml) with the Storage Name you created above. 
+
+A commit to setup.yml will enable [train_model.yml](/.github/workflows/train_model.yml) to be executed on any change in Storage Account. 
+
+
 
 # Documentation
 
@@ -113,6 +154,7 @@ The log outputs of your action will provide URLs for you to view the resources t
 | `README.md`                   | This README file.                          |
 | `SECURITY.md`                 | Microsoft Security README.                 |
 
+
 ## Documentation of Azure Machine Learning GitHub Actions
 
 The template uses the open source Azure certified Actions listed below. Click on the links and read the README files for more details.
@@ -121,6 +163,43 @@ The template uses the open source Azure certified Actions listed below. Click on
 - [aml-run](https://github.com/Azure/aml-run) - Submits a ScriptRun, an Estimator or a Pipeline to Azure Machine Learning
 - [aml-registermodel](https://github.com/Azure/aml-registermodel) - Registers a model to Azure Machine Learning
 - [aml-deploy](https://github.com/Azure/aml-deploy) - Deploys a model and creates an endpoint for the model
+
+
+## Arm template to deploy azure resources
+The workflow file 'setup.yml' deploys arm template to azure using standard azure CLI deploy command.
+Arm Template [deploy.core-infra.json](/infra/deploy.core-infra.json) is used to deploy azure resources to azure . It uses the parameters provided in file [deploy.core-infra.params.json](/infra/params.deploy.core-infra.json)  to create new resources or update the resources if they are already present.
+
+### Documentation of template file parameters
+
+| Parameter                  | Description                                |
+| ----------------------------- | ------------------------------------------ |
+| `workspaceName`                        | Specifies the name of the Azure Machine Learning workspace.If the resource doesn't exist a new workspace will be created, else existing resource will be updated using the arm template file |
+| `baseName`                  | Name used as base-template to name the resources to be deployed in Azure. |
+| `OwnerName`         | Owner of this deployment, person to contact for question. |
+| `GitHubBranch`  | Name of the branch containing azure function code. |
+| `eventGridTopicPrefix`   | The name of the Event Grid custom topic. |
+| `eventGridSubscriptionName`                 | The prefix of the Event Grid custom topic's subscription. |
+| `FunctionName`        |name of azure function used|
+| `subscriptionID` | azure subscription ID being used for deployment |
+| `GitHubURL`           | The URL of GitHub (ending by .git) containing azure function code. |
+| `funcProjectFolder`               | The name of folder containing the function code. |
+| `repo_name`           | The name of repository containing template files.This is picked up from github environment parameter 'GITHUB_REPOSITORY' |
+| `pat_token`                        | pat token to be used by the function app to communicate to github via repository dispatch. |
+
+
+## Event Grid Subscription
+User can modify the deploy_event_grid.json arm template to add/remove the storage events that he/she 
+wants to subscribe to [here](https://github.com/Azure-Samples/mlops-enterprise-template/blob/eb32e4df6e9124777e9d5216a7b3841992f03924/infra/deploy.core-infra.json#L526). These are the available events from storage account :
+```sh
+
+Microsoft.Storage.BlobCreated
+Microsoft.Storage.BlobDeleted
+Microsoft.Storage.BlobRenamed
+Microsoft.Storage.DirectoryCreated
+Microsoft.Storage.DirectoryRenamed
+Microsoft.Storage.DirectoryDeleted
+
+```
 
 ## Known issues
 
@@ -157,4 +236,3 @@ provided by the bot. You will only need to do this once across all repos using o
 This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
 For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
 contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
-
